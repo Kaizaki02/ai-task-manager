@@ -1,0 +1,12 @@
+# Render "Blueprint": push this repo to GitHub, then New > Blueprint on render.com.
+services:
+  - type: web
+    name: ai-task-manager
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: GROQ_API_KEY   # optional (free key): enables the LLM summary
+        sync: false

@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Task Manager</title>
+  <style>
+    :root {
+      --bg: #f4f5f9; --card: #ffffff; --text: #1d2033; --muted: #6b7088;
+      --border: #e2e4ee; --accent: #5b4bdb; --accent-soft: #ece9ff;
+      --high: #d9374a; --medium: #e08a00; --low: #2e9e63; --danger: #d9374a;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #14151f; --card: #1d1f2e; --text: #eceef8; --muted: #9a9fba;
+        --border: #2d3045; --accent: #8c7dff; --accent-soft: #2a2750;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.5;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    h1 { font-size: 1.4rem; margin: 0; }
+    h1 span { color: var(--accent); }
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 14px; padding: 18px; margin-bottom: 16px;
+    }
+    label { display: block; font-size: .8rem; color: var(--muted); margin-bottom: 4px; }
+    input, select, textarea {
+      width: 100%; padding: 9px 11px; border-radius: 9px; font: inherit;
+      border: 1px solid var(--border); background: var(--bg); color: var(--text);
+    }
+    input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    textarea { resize: vertical; min-height: 56px; }
+    .row { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-top: 12px; }
+    button {
+      font: inherit; cursor: pointer; border: 0; border-radius: 9px; padding: 9px 16px;
+      background: var(--accent); color: #fff; font-weight: 600;
+    }
+    button:hover { filter: brightness(1.08); }
+    button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+    button.small { padding: 4px 10px; font-size: .8rem; }
+    button.danger { background: transparent; color: var(--danger); border: 1px solid var(--border); }
+    .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+    .tabs button { flex: 1; background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
+    .tabs button.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+    .error { color: var(--danger); font-size: .9rem; min-height: 1.3em; margin: 10px 0 0; }
+    .toolbar { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+    .toolbar > div { flex: 1; min-width: 130px; }
+    .ai { background: var(--accent-soft); border-color: var(--accent); }
+    .ai p { margin: 8px 0 0; }
+    .badge {
+      display: inline-block; font-size: .7rem; font-weight: 700; text-transform: uppercase;
+      padding: 2px 8px; border-radius: 999px; color: #fff; letter-spacing: .03em;
+    }
+    .badge.high { background: var(--high); } .badge.medium { background: var(--medium); } .badge.low { background: var(--low); }
+    .task { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; }
+    .task h3 { margin: 0 0 4px; font-size: 1rem; }
+    .task.done h3 { text-decoration: line-through; color: var(--muted); }
+    .task .meta { font-size: .8rem; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .task .desc { margin: 4px 0 0; font-size: .9rem; color: var(--muted); }
+    .task .actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+    .task select { width: auto; padding: 4px 8px; font-size: .8rem; }
+    .overdue { color: var(--danger); font-weight: 600; }
+    .rank { font-size: .75rem; color: var(--accent); font-weight: 700; }
+    .empty { text-align: center; color: var(--muted); padding: 24px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>AI <span>Task Manager</span></h1>
+    <div id="userbox" class="hidden">
+      <span id="whoami" style="color: var(--muted); margin-right: 10px"></span>
+      <button class="ghost small" id="logout">Log out</button>
+    </div>
+  </header>
+
+  <!-- Auth -->
+  <section id="auth" class="card hidden">
+    <div class="tabs">
+      <button id="tab-login" class="active" type="button">Log in</button>
+      <button id="tab-register" type="button">Register</button>
+    </div>
+    <form id="auth-form">
+      <label for="username">Username</label>
+      <input id="username" autocomplete="username" required minlength="3" maxlength="50">
+      <div style="height: 12px"></div>
+      <label for="password">Password (min 6 characters)</label>
+      <input id="password" type="password" autocomplete="current-password" required minlength="6">
+      <div style="height: 14px"></div>
+      <button id="auth-submit" type="submit">Log in</button>
+      <p class="error" id="auth-error"></p>
+    </form>
+  </section>
+
+  <!-- App -->
+  <main id="app" class="hidden">
+    <form id="task-form" class="card">
+      <label for="title">New task</label>
+      <input id="title" placeholder="What needs to be done?" required maxlength="200">
+      <div style="height: 10px"></div>
+      <textarea id="description" placeholder="Details (optional)" maxlength="2000"></textarea>
+      <div class="row">
+        <div><label for="priority">Priority</label>
+          <select id="priority">
+            <option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option>
+          </select></div>
+        <div><label for="due">Due date</label><input id="due" type="date"></div>
+        <div style="display: flex; align-items: end"><button type="submit" style="width: 100%">Add task</button></div>
+      </div>
+      <p class="error" id="task-error"></p>
+    </form>
+
+    <section class="card ai">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px">
+        <strong>✨ AI summary</strong>
+        <button id="ai-btn" type="button">Summarize &amp; prioritize</button>
+      </div>
+      <p id="ai-text" style="color: var(--muted)">Get a summary of your open tasks and a suggested order.</p>
+    </section>
+
+    <div class="toolbar" style="margin-bottom: 12px">
+      <div><label for="f-status">Status</label>
+        <select id="f-status">
+          <option value="">All</option><option value="todo">To do</option>
+          <option value="in_progress">In progress</option><option value="done">Done</option>
+        </select></div>
+      <div><label for="f-priority">Priority</label>
+        <select id="f-priority">
+          <option value="">All</option><option value="high">High</option>
+          <option value="medium">Medium</option><option value="low">Low</option>
+        </select></div>
+    </div>
+
+    <div id="tasks"></div>
+  </main>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const state = {
+  token: localStorage.getItem("token"),
+  username: localStorage.getItem("username"),
+  mode: "login",
+  order: null, // task ids in AI-suggested order
+};
+
+function el(tag, props = {}, ...children) {
+  const node = document.createElement(tag);
+  Object.assign(node, props);
+  node.append(...children);
+  return node;
+}
+
+async function api(path, { method = "GET", body, form } = {}) {
+  const headers = {};
+  if (state.token) headers.Authorization = `Bearer ${state.token}`;
+  let payload;
+  if (form) payload = new URLSearchParams(form);
+  else if (body) { headers["Content-Type"] = "application/json"; payload = JSON.stringify(body); }
+  const res = await fetch(path, { method, headers, body: payload });
+  if (res.status === 401 && state.token) { logout(); throw new Error("Session expired, please log in again"); }
+  if (!res.ok) {
+    let msg = res.statusText;
+    try {
+      const data = await res.json();
+      msg = typeof data.detail === "string" ? data.detail : data.detail.map((e) => e.msg).join(", ");
+    } catch (_) { /* keep statusText */ }
+    throw new Error(msg);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+/* ---------- auth ---------- */
+function setMode(mode) {
+  state.mode = mode;
+  $("tab-login").classList.toggle("active", mode === "login");
+  $("tab-register").classList.toggle("active", mode === "register");
+  $("auth-submit").textContent = mode === "login" ? "Log in" : "Create account";
+  $("password").autocomplete = mode === "login" ? "current-password" : "new-password";
+  $("auth-error").textContent = "";
+}
+$("tab-login").onclick = () => setMode("login");
+$("tab-register").onclick = () => setMode("register");
+
+$("auth-form").onsubmit = async (e) => {
+  e.preventDefault();
+  const username = $("username").value.trim();
+  const password = $("password").value;
+  $("auth-error").textContent = "";
+  try {
+    if (state.mode === "register") {
+      await api("/api/auth/register", { method: "POST", body: { username, password } });
+    }
+    const data = await api("/api/auth/login", { method: "POST", form: { username, password } });
+    state.token = data.access_token;
+    state.username = username;
+    localStorage.setItem("token", state.token);
+    localStorage.setItem("username", username);
+    $("auth-form").reset();
+    showApp();
+  } catch (err) { $("auth-error").textContent = err.message; }
+};
+
+function logout() {
+  state.token = state.username = state.order = null;
+  localStorage.removeItem("token");
+  localStorage.removeItem("username");
+  showAuth();
+}
+$("logout").onclick = logout;
+
+function showAuth() {
+  $("auth").classList.remove("hidden");
+  $("app").classList.add("hidden");
+  $("userbox").classList.add("hidden");
+}
+function showApp() {
+  $("auth").classList.add("hidden");
+  $("app").classList.remove("hidden");
+  $("userbox").classList.remove("hidden");
+  $("whoami").textContent = state.username;
+  loadTasks();
+}
+
+/* ---------- tasks ---------- */
+const STATUS_LABEL = { todo: "To do", in_progress: "In progress", done: "Done" };
+let currentTasks = [];
+
+async function loadTasks() {
+  const params = new URLSearchParams();
+  if ($("f-status").value) params.set("status", $("f-status").value);
+  if ($("f-priority").value) params.set("priority", $("f-priority").value);
+  try {
+    currentTasks = await api(`/api/tasks?${params}`);
+    renderTasks();
+  } catch (err) { $("task-error").textContent = err.message; }
+}
+
+function renderTasks() {
+  const box = $("tasks");
+  box.replaceChildren();
+  let tasks = [...currentTasks];
+  if (state.order) {
+    const rank = new Map(state.order.map((id, i) => [id, i]));
+    tasks.sort((a, b) => (rank.get(a.id) ?? 1e6) - (rank.get(b.id) ?? 1e6));
+  }
+  if (!tasks.length) { box.append(el("div", { className: "card empty", textContent: "No tasks yet. Add one above!" })); return; }
+
+  const today = new Date().toISOString().slice(0, 10);
+  for (const t of tasks) {
+    const meta = el("div", { className: "meta" }, el("span", { className: `badge ${t.priority}`, textContent: t.priority }));
+    if (t.due_date) {
+      const overdue = t.status !== "done" && t.due_date < today;
+      meta.append(el("span", { className: overdue ? "overdue" : "", textContent: `${overdue ? "Overdue · " : "Due "}${t.due_date}` }));
+    }
+    if (state.order && state.order.includes(t.id) && t.status !== "done") {
+      meta.append(el("span", { className: "rank", textContent: `#${state.order.indexOf(t.id) + 1} suggested` }));
+    }
+    const info = el("div", {}, el("h3", { textContent: t.title }), meta);
+    if (t.description) info.append(el("p", { className: "desc", textContent: t.description }));
+
+    const sel = el("select");
+    for (const [value, label] of Object.entries(STATUS_LABEL)) sel.append(new Option(label, value, false, value === t.status));
+    sel.onchange = () => updateTask(t.id, { status: sel.value });
+    const del = el("button", { className: "danger small", textContent: "Delete", onclick: () => removeTask(t.id) });
+
+    box.append(el("article", { className: `card task ${t.status === "done" ? "done" : ""}` }, info, el("div", { className: "actions" }, sel, del)));
+  }
+}
+
+$("task-form").onsubmit = async (e) => {
+  e.preventDefault();
+  $("task-error").textContent = "";
+  try {
+    await api("/api/tasks", { method: "POST", body: {
+      title: $("title").value.trim(),
+      description: $("description").value.trim(),
+      priority: $("priority").value,
+      due_date: $("due").value || null,
+    }});
+    $("task-form").reset();
+    state.order = null;
+    loadTasks();
+  } catch (err) { $("task-error").textContent = err.message; }
+};
+
+async function updateTask(id, changes) {
+  try { await api(`/api/tasks/${id}`, { method: "PUT", body: changes }); loadTasks(); }
+  catch (err) { $("task-error").textContent = err.message; }
+}
+async function removeTask(id) {
+  if (!confirm("Delete this task?")) return;
+  try { await api(`/api/tasks/${id}`, { method: "DELETE" }); loadTasks(); }
+  catch (err) { $("task-error").textContent = err.message; }
+}
+$("f-status").onchange = $("f-priority").onchange = loadTasks;
+
+/* ---------- AI ---------- */
+$("ai-btn").onclick = async () => {
+  const btn = $("ai-btn"), out = $("ai-text");
+  btn.disabled = true; out.textContent = "Thinking…";
+  try {
+    const data = await api("/api/ai/summary", { method: "POST" });
+    out.textContent = "";
+    out.append(data.summary, el("br"), el("small", { style: "color: var(--muted)", textContent: `Generated by: ${data.source === "llm" ? "AI model" : "built-in rules (no API key set)"}` }));
+    state.order = data.suggested_order;
+    renderTasks();
+  } catch (err) { out.textContent = err.message; }
+  finally { btn.disabled = false; }
+};
+
+/* ---------- boot ---------- */
+if (state.token) showApp(); else showAuth();
+</script>
+</body>
+</html>
